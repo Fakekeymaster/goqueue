@@ -6,7 +6,7 @@ A thread in C++ costs ~1MB of stack. A goroutine costs ~8KB. You can run 100,000
 *Channels:*
 Go's way of passing data between goroutines safely. Think of it like a pipe — one goroutine writes in, another reads out. We'll use channels for the shutdown signal.
 
-## Here's what stage 1 invloves:
+## Here's what stage 1 involves:
 - mkdir goqueue && cd goqueue
 - go mod init github.com/yourusername/goqueue
 - Create the folder Structure 
