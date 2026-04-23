@@ -1,0 +1,12 @@
+# compiled binary
+goqueue
+
+# environment files
+.env
+
+# Mac junk
+.DS_Store
+
+# Go test cache
+*.test
+*.out
