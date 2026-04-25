@@ -40,3 +40,18 @@ If you used redis.Client directly in your worker, API, and CLI — and you later
 - Added the ID to goqueue:jobs
 - BRPOP pulled the ID back from the high queue
 - Fetched and deserialized the full job from Redis
+
+### The Enqueue Flow (Go → Redis)
+When you call s.Enqueue(ctx, job), several things happen inside Redis via a Pipeline (one big batch):
+
+- Metadata Storage (The Vault): The job is converted to JSON and stored in a Redis Hash at goqueue:job:<ID>. This is the "source of truth" containing the status, retry count, etc.
+- The Index: The Job ID is added to a Redis Set (goqueue:jobs). This is just a list of all jobs so we can find them later.
+- The Waiting Line (The Queue): The Job ID is pushed into a Redis List (e.g., goqueue:queue:high).
+Note: We don't push the whole JSON into the list; we only push the ID to keep the queue lightweight.
+
+### The Dequeue Flow (Redis → Go)
+When a worker (or your main.go test) calls s.Dequeue(...):
+
+- The Wait: Redis looks at the goqueue:queue:* lists. If they are empty, it makes your Go program "sleep" (BRPOP).
+- The Grab: The moment a Job ID appears in a list, Redis "pops" it out and hands the ID back to Go.
+- The Hydration: Your code then uses that ID to look up the full JSON metadata from the Vault (the Hash we made in step 2) and converts it back into a Go struct.

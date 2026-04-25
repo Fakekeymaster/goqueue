@@ -48,7 +48,7 @@ const (
 	StatusRetrying Status = "retrying"
 )
 
-// Job is the core data structure of the entire system.
+// Job is the core data structure of the entire systim.
 type Job struct {
     ID          string     `json:"id"`
     Name        string     `json:"name"`

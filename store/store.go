@@ -14,11 +14,11 @@ import (
 //All Redis key patterns in one place
 const (
     keyJobMeta     = "goqueue:job:%s"       // %s = job ID
-    keyQueueHigh   = "goqueue:queue:high"
-    keyQueueMedium = "goqueue:queue:medium"
-    keyQueueLow    = "goqueue:queue:low"
-    keyAllJobs     = "goqueue:jobs"
-    keyStats       = "goqueue:stats"
+    keyQueueHigh   = "goqueue:queue:high"	//redis LIST
+    keyQueueMedium = "goqueue:queue:medium"	//redis LIST
+    keyQueueLow    = "goqueue:queue:low"	//redis LIST
+    keyAllJobs     = "goqueue:jobs"			//redis SET
+    keyStats       = "goqueue:stats"		//redis HASH
 )
 
 type Store struct {

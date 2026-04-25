@@ -6,6 +6,7 @@ import (
 )
 
 // Config holds all runtime configuration for the app.
+//All are related to redis server
 type Config struct {
 	RedisAddr	string
 	RedisPass	string
