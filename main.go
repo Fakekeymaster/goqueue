@@ -1,29 +1,57 @@
 package main
 
 import (
-	"fmt"
-	"time"
+    "context"
+    "fmt"
+    "log"
+    "time"
 
-	"github.com/Fakekeymaster/goqueue/queue"
+    "github.com/Fakekeymaster/goqueue/config"
+    "github.com/Fakekeymaster/goqueue/queue"
+    "github.com/Fakekeymaster/goqueue/store"
+    "github.com/google/uuid"
 )
 
 func main() {
-	fmt.Printf("goqueue starting...\n")
+    cfg := config.Load()
 
-	job := queue.Job{
-		ID:         "test-123",
-		Name:       "send-welcome-email",
-		Type:       "email_send",
-		Priority:   queue.PriorityHigh,
-		Status:     queue.StatusPending,
-		Retries:    0,
-		MaxRetries: 3,
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
-	}
+    s, err := store.New(cfg)
+    if err != nil {
+        log.Fatalf("store init failed: %v", err)
+    }
+    defer s.Close()
 
-	fmt.Printf("Job Name:     %s\n", job.Name)
-	fmt.Printf("Job Priority: %s\n", job.Priority)
-	fmt.Printf("Job Status:   %s\n", job.Status)
+    ctx := context.Background()
 
+    // Create and enqueue a job
+    job := &queue.Job{
+        ID:         uuid.New().String(),
+        Name:       "send-welcome-email",
+        Type:       "email_send",
+        Priority:   queue.PriorityHigh,
+        Status:     queue.StatusPending,
+        MaxRetries: 3,
+        CreatedAt:  time.Now(),
+        UpdatedAt:  time.Now(),
+    }
+
+    if err := s.Enqueue(ctx, job); err != nil {
+        log.Fatalf("enqueue failed: %v", err)
+    }
+    fmt.Printf("Enqueued job: %s\n", job.ID)
+
+    // Dequeue it back
+    fetched, err := s.Dequeue(ctx, 2*time.Second)
+    if err != nil {
+        log.Fatalf("dequeue failed: %v", err)
+    }
+
+    fmt.Printf("Dequeued job: %s\n", fetched.Name)
+    fmt.Printf("Priority:     %s\n", fetched.Priority)
+    fmt.Printf("Status:       %s\n", fetched.Status)
+
+    // Get stats
+    stats, _ := s.GetStats(ctx)
+    fmt.Printf("Stats:        enqueued=%s pending=%s\n",
+        stats["enqueued"], stats["pending"])
 }
