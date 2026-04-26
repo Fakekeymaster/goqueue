@@ -3,7 +3,7 @@ Redis is our broker — the middleman between producers and workers.
 
 
 ## Why environment variables and not a config file?
-Two reasons. First, secrets (Redis password) should never be in code or committed to git. Second, Docker and Kubernetes set config via env vars — your app works the same way locally and in production without changing a single line of code.
+Two reasons. First, secrets (Redis password) should never be in code or committed to git. Second, Docker and Kubernetes set config via env vars — my app works the same way locally and in production without changing a single line of code.
 
 ### Note 
 Environment variables are always strings, that is why we use `getEnvInt` to convert them to integers.

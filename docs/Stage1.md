@@ -1,6 +1,6 @@
 # Stage 1 - Project skeleton + go mod init
 
-**Before Stage 1 — two quick concepts you need**
+### Before Stage 1 — two quick concepts we need
 *Goroutines vs threads:*
 A thread in C++ costs ~1MB of stack. A goroutine costs ~8KB. You can run 100,000 goroutines easily. Our worker pool is just N goroutines — extremely lightweight.
 *Channels:*

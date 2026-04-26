@@ -2,13 +2,13 @@ package main
 
 import (
     "context"
-    "fmt"
     "log"
     "time"
 
     "github.com/Fakekeymaster/goqueue/config"
     "github.com/Fakekeymaster/goqueue/queue"
     "github.com/Fakekeymaster/goqueue/store"
+    "github.com/Fakekeymaster/goqueue/worker"
     "github.com/google/uuid"
 )
 
@@ -17,41 +17,56 @@ func main() {
 
     s, err := store.New(cfg)
     if err != nil {
-        log.Fatalf("store init failed: %v", err)
+        log.Fatalf("store: %v", err)
     }
     defer s.Close()
 
-    ctx := context.Background()
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
 
-    // Create and enqueue a job
-    job := &queue.Job{
-        ID:         uuid.New().String(),
-        Name:       "send-welcome-email",
-        Type:       "email_send",
-        Priority:   queue.PriorityHigh,
-        Status:     queue.StatusPending,
-        MaxRetries: 3,
-        CreatedAt:  time.Now(),
-        UpdatedAt:  time.Now(),
+    // Enqueue 5 jobs at different priorities
+    jobs := []struct {
+        name     string
+        jobType  string
+        priority queue.Priority
+    }{
+        {"urgent-report",  "report_gen",    queue.PriorityHigh},
+        {"welcome-email",  "email_send",    queue.PriorityHigh},
+        {"resize-avatar",  "image_resize",  queue.PriorityMedium},
+        {"weekly-digest",  "email_send",    queue.PriorityMedium},
+        {"cleanup-logs",   "log_cleanup",   queue.PriorityLow},
     }
 
-    if err := s.Enqueue(ctx, job); err != nil {
-        log.Fatalf("enqueue failed: %v", err)
+    for _, j := range jobs {
+        job := &queue.Job{
+            ID:         uuid.New().String(),
+            Name:       j.name,
+            Type:       j.jobType,
+            Priority:   j.priority,
+            Status:     queue.StatusPending,
+            MaxRetries: cfg.MaxRetries,
+            CreatedAt:  time.Now(),
+            UpdatedAt:  time.Now(),
+        }
+        if err := s.Enqueue(ctx, job); err != nil {
+            log.Fatalf("enqueue: %v", err)
+        }
+        log.Printf("enqueued: %-20s priority=%s", job.Name, job.Priority)
     }
-    fmt.Printf("Enqueued job: %s\n", job.ID)
 
-    // Dequeue it back
-    fetched, err := s.Dequeue(ctx, 2*time.Second)
-    if err != nil {
-        log.Fatalf("dequeue failed: %v", err)
-    }
+    // Start pool with 3 workers — let it run for 5 seconds then stop
+    log.Println("--- starting worker pool ---")
+    pool := worker.NewPool(3, s, nil)
 
-    fmt.Printf("Dequeued job: %s\n", fetched.Name)
-    fmt.Printf("Priority:     %s\n", fetched.Priority)
-    fmt.Printf("Status:       %s\n", fetched.Status)
+    // Run pool in a goroutine so we can stop it after a timeout
+    go pool.Start(ctx)
 
-    // Get stats
-    stats, _ := s.GetStats(ctx)
-    fmt.Printf("Stats:        enqueued=%s pending=%s\n",
-        stats["enqueued"], stats["pending"])
+    // Let workers process for 5 seconds
+    time.Sleep(5 * time.Second)
+
+    log.Println("--- stopping pool ---")
+    cancel() // signal all workers to stop
+    pool.Stop()
+
+    log.Println("--- done ---")
 }
