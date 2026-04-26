@@ -1,72 +1,61 @@
 package main
 
 import (
-    "context"
-    "log"
-    "time"
+	"context"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-    "github.com/Fakekeymaster/goqueue/config"
-    "github.com/Fakekeymaster/goqueue/queue"
-    "github.com/Fakekeymaster/goqueue/store"
-    "github.com/Fakekeymaster/goqueue/worker"
-    "github.com/google/uuid"
+	"github.com/Fakekeymaster/goqueue/api"
+	"github.com/Fakekeymaster/goqueue/config"
+	"github.com/Fakekeymaster/goqueue/store"
+	"github.com/Fakekeymaster/goqueue/worker"
 )
 
 func main() {
-    cfg := config.Load()
+	cfg := config.Load()
 
-    s, err := store.New(cfg)
-    if err != nil {
-        log.Fatalf("store: %v", err)
-    }
-    defer s.Close()
+	// Connect to Redis
+	s, err := store.New(cfg)
+	if err != nil {
+		log.Fatalf("store: %v", err)
+	}
+	defer s.Close()
 
-    ctx, cancel := context.WithCancel(context.Background())
-    defer cancel()
+	// Root context — cancelling this shuts everything down
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-    // Enqueue 5 jobs at different priorities
-    jobs := []struct {
-        name     string
-        jobType  string
-        priority queue.Priority
-    }{
-        {"urgent-report",  "report_gen",    queue.PriorityHigh},
-        {"welcome-email",  "email_send",    queue.PriorityHigh},
-        {"resize-avatar",  "image_resize",  queue.PriorityMedium},
-        {"weekly-digest",  "email_send",    queue.PriorityMedium},
-        {"cleanup-logs",   "log_cleanup",   queue.PriorityLow},
-    }
+	// Start worker pool in background
+	pool := worker.NewPool(cfg.WorkerCount, s, nil)
+	go pool.Start(ctx)
 
-    for _, j := range jobs {
-        job := &queue.Job{
-            ID:         uuid.New().String(),
-            Name:       j.name,
-            Type:       j.jobType,
-            Priority:   j.priority,
-            Status:     queue.StatusPending,
-            MaxRetries: cfg.MaxRetries,
-            CreatedAt:  time.Now(),
-            UpdatedAt:  time.Now(),
-        }
-        if err := s.Enqueue(ctx, job); err != nil {
-            log.Fatalf("enqueue: %v", err)
-        }
-        log.Printf("enqueued: %-20s priority=%s", job.Name, job.Priority)
-    }
+	// Start API server in background
+	apiServer := api.NewServer(cfg, s)
+	go func() {
+		if err := apiServer.Start(); err != nil {
+			log.Printf("[main] api server stopped: %v", err)
+		}
+	}()
 
-    // Start pool with 3 workers — let it run for 5 seconds then stop
-    log.Println("--- starting worker pool ---")
-    pool := worker.NewPool(3, s, nil)
+	log.Printf("[main] goqueue running — workers=%d port=%s redis=%s",
+		cfg.WorkerCount, cfg.APIPort, cfg.RedisAddr)
 
-    // Run pool in a goroutine so we can stop it after a timeout
-    go pool.Start(ctx)
+	// Block until SIGINT (Ctrl+C) or SIGTERM (docker stop)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit // wait here
 
-    // Let workers process for 5 seconds
-    time.Sleep(5 * time.Second)
+	log.Println("[main] shutting down...")
+	cancel() // stop workers
 
-    log.Println("--- stopping pool ---")
-    cancel() // signal all workers to stop
-    pool.Stop()
+	// Give HTTP server 10 seconds to finish in-flight requests
+	shutCtx, shutCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutCancel()
+	apiServer.Shutdown(shutCtx)
 
-    log.Println("--- done ---")
+	pool.Stop()
+	log.Println("[main] bye")
 }

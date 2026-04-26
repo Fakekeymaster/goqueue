@@ -9,7 +9,6 @@ import (
 )
 
 // Pool manages a fixed number of concurrent workers.
-// Think of it as a goroutine supervisor.
 type Pool struct {
     size    int
     store   *store.Store
