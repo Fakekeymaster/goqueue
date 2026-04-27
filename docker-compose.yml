@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  # Redis — our message broker and job store
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"      # expose Redis to host for debugging
+    volumes:
+      - redis_data:/data  # persist data across container restarts
+    command: redis-server --appendonly yes  # enable AOF persistence
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # goqueue — our app
+  goqueue:
+    build: .             # build from Dockerfile in current directory
+    ports:
+      - "8080:8080"      # host:container port mapping
+    environment:
+      - REDIS_ADDR=redis:6379   # use service name, not localhost
+      - WORKER_COUNT=5
+      - API_PORT=8080
+      - MAX_RETRIES=3
+    depends_on:
+      redis:
+        condition: service_healthy  # wait for Redis ping to succeed
+    restart: unless-stopped         # auto-restart on crash
+
+# Named volume — data persists even when containers are removed
+volumes:
+  redis_data:
