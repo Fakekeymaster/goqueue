@@ -1,7 +1,7 @@
 # ── Stage 1: Builder ──────────────────────────────────────────
 # We use a full Go image to compile the binary.
 # This stage is temporary — it won't exist in the final image.
-FROM golang:1.22-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 # Set working directory inside the container
 WORKDIR /app
